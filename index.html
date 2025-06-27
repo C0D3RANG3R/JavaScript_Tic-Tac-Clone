@@ -1,28 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tic Tac Toe</title>
+  <link rel="stylesheet" href="styles.css" />
   <script src="script.js" defer></script>
-  <title>Document</title>
 </head>
+
 <body>
-  <div class="board" id="board">
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
-    <div class="cell" data-cell></div>
+  <header id="menu" class="toolbar">
+    <button class="mode" data-mode="easy">Play vs Computer (Easy)</button>
+    <button class="mode" data-mode="medium">Play vs Computer (Medium)</button>
+    <button class="mode" data-mode="hard">Play vs Computer (Hard)</button>
+    <button class="mode" data-mode="friend">Play vs Friend</button>
+  </header>
+
+  <div id="turnIndicator" class="turn-indicator" hidden></div>
+  <div id="scoreBoard" hidden>
+    X: <span id="xScore">0</span> | O: <span id="oScore">0</span>
   </div>
-  <div class="winning-message" id="winningMessage">
-    <div data-winning-message-text></div>
-    <button id="restartButton">Restart</button>
-  </div>
+
+  <main id="board" class="board" role="grid" aria-label="Tic Tac Toe board"></main>
+
+  <section id="winningMessage" class="winning-message">
+  <div data-winning-message-text></div>
+  <button id="restartButton">Restart</button>
+</section>
+
 </body>
 </html>
