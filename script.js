@@ -6,21 +6,24 @@ const WIN_COMBOS = [
   [0, 4, 8], [2, 4, 6]
 ];
 
-const board = document.getElementById('board');
-const menu = document.getElementById('menu');
-const modeBtns = document.querySelectorAll('.mode');
-const turnLabel = document.getElementById('turnIndicator');
+const board      = document.getElementById('board');
+const menu       = document.getElementById('menu');
+const modeBtns   = document.querySelectorAll('.mode');
+const turnLabel  = document.getElementById('turnIndicator');
 const scoreBoard = document.getElementById('scoreBoard');
-const xScoreEl = document.getElementById('xScore');
-const oScoreEl = document.getElementById('oScore');
-const msgBox = document.getElementById('winningMessage');
-const msgTxt = document.querySelector('[data-winning-message-text]');
+const xScoreEl   = document.getElementById('xScore');
+const oScoreEl   = document.getElementById('oScore');
+const msgBox     = document.getElementById('winningMessage');
+const msgTxt     = document.querySelector('[data-winning-message-text]');
 const restartBtn = document.getElementById('restartButton');
 
-let circleTurn = false;
-let cells = [];
-let aiMode = null;
+let cells = [], circleTurn = false, aiMode = null;
 let xWins = 0, oWins = 0;
+
+// Optional: sound (safely ignore if missing)
+const clickSfx = new Audio('click.mp3');
+const winSfx   = new Audio('win.mp3');
+const drawSfx  = new Audio('draw.mp3');
 
 modeBtns.forEach(btn => {
   btn.addEventListener('click', () => {
@@ -32,9 +35,16 @@ modeBtns.forEach(btn => {
   });
 });
 
-restartBtn.addEventListener('click', showMenu);
+restartBtn.addEventListener('click', () => {
+  toMenu();
+});
 
-function showMenu() {
+document.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'r' && msgBox.classList.contains('show')) startGame();
+  if (e.key.toLowerCase() === 'm') toMenu();
+});
+
+function toMenu() {
   msgBox.classList.remove('show');
   msgBox.style.display = 'none';
   board.innerHTML = '';
@@ -44,12 +54,15 @@ function showMenu() {
 }
 
 function startGame() {
+  board.innerHTML = '';
   msgBox.classList.remove('show');
   msgBox.style.display = 'none';
-  board.innerHTML = '';
   circleTurn = false;
+
   for (let i = 0; i < 9; i++) createCell();
-  cells = Array.from(board.querySelectorAll('[data-cell]'));
+
+  cells = [...board.querySelectorAll('[data-cell]')];
+  board.className = 'board x';
   setHover();
 }
 
@@ -59,24 +72,28 @@ function createCell() {
   cell.dataset.cell = '';
   cell.role = 'gridcell';
   cell.tabIndex = 0;
+
   cell.addEventListener('click', handleClick, { once: true });
   cell.addEventListener('keydown', e => {
-    if ((e.key === 'Enter' || e.key === ' ') && !cell.classList.contains(X) && !cell.classList.contains(O)) {
+    if ((e.key === 'Enter' || e.key === ' ') && !cell.classList.length) {
       e.preventDefault();
       cell.click();
     }
   });
+
   board.appendChild(cell);
 }
 
 function handleClick(e) {
   const cell = e.target;
+
   if (cell.classList.contains(X) || cell.classList.contains(O)) return;
 
   const mark = circleTurn ? O : X;
   markCell(cell, mark);
 
   if (checkWin(mark)) {
+    highlightWin(mark);
     finishGame(false);
     return;
   }
@@ -90,19 +107,20 @@ function handleClick(e) {
 
   if (aiMode && circleTurn) {
     setTimeout(() => {
-      const aiMove = getAIMove();
-      if (aiMove) {
-        markCell(aiMove, O);
-        if (checkWin(O)) {
-          finishGame(false);
-          return;
-        }
-        if (isDraw()) {
-          finishGame(true);
-          return;
-        }
-        swapTurns();
+      makeAIMove();
+
+      if (checkWin(O)) {
+        highlightWin(O);
+        finishGame(false);
+        return;
       }
+
+      if (isDraw()) {
+        finishGame(true);
+        return;
+      }
+
+      swapTurns();
       setHover();
     }, 200);
   } else {
@@ -110,12 +128,15 @@ function handleClick(e) {
   }
 }
 
-function getAIMove() {
+function makeAIMove() {
   const empty = cells.filter(c => !c.classList.contains(X) && !c.classList.contains(O));
-  if (aiMode === 'easy') return randomMove(empty);
-  if (aiMode === 'medium') return mediumMove(empty);
-  if (aiMode === 'hard') return hardMove();
-  return null;
+  let move = null;
+
+  if (aiMode === 'easy')   move = randomMove(empty);
+  if (aiMode === 'medium') move = mediumMove(empty);
+  if (aiMode === 'hard')   move = hardMove();
+
+  if (move) markCell(move, O);
 }
 
 function randomMove(options) {
@@ -123,24 +144,16 @@ function randomMove(options) {
 }
 
 function mediumMove(options) {
-  // Try to win
   for (const cell of options) {
-    cell.classList.add(O);
-    if (checkWin(O)) {
-      cell.classList.remove(O);
-      return cell;
-    }
-    cell.classList.remove(O);
+    markTemp(cell, O);
+    if (checkWin(O)) return unmarkTemp(cell);
+    unmarkTemp(cell);
   }
 
-  // Block opponent
   for (const cell of options) {
-    cell.classList.add(X);
-    if (checkWin(X)) {
-      cell.classList.remove(X);
-      return cell;
-    }
-    cell.classList.remove(X);
+    markTemp(cell, X);
+    if (checkWin(X)) return unmarkTemp(cell);
+    unmarkTemp(cell);
   }
 
   const center = options.find(c => cells.indexOf(c) === 4);
@@ -157,37 +170,54 @@ function hardMove() {
     c.classList.contains(X) ? X :
     c.classList.contains(O) ? O : null
   );
-  const result = minimax(state, true, 0);
-  return result.index !== undefined ? cells[result.index] : null;
+  const best = minimax(state, true, 0).index;
+  return cells[best];
 }
 
 function minimax(state, isMax, depth) {
-  if (checkStaticWin(state, O)) return { score: 10 - depth };
-  if (checkStaticWin(state, X)) return { score: depth - 10 };
-  if (state.every(cell => cell !== null)) return { score: 0 };
+  if (hasWinner(state, O)) return { score: 10 - depth };
+  if (hasWinner(state, X)) return { score: depth - 10 };
+  if (state.every(cell => cell)) return { score: 0 };
 
-  const scores = [];
+  const moves = [];
 
-  state.forEach((val, idx) => {
-    if (val === null) {
-      const nextState = [...state];
-      nextState[idx] = isMax ? O : X;
-      const result = minimax(nextState, !isMax, depth + 1);
-      scores.push({ index: idx, score: result.score });
+  state.forEach((val, i) => {
+    if (!val) {
+      const next = [...state];
+      next[i] = isMax ? O : X;
+      const result = minimax(next, !isMax, depth + 1);
+      moves.push({ index: i, score: result.score });
     }
   });
 
   return isMax
-    ? scores.reduce((a, b) => a.score > b.score ? a : b)
-    : scores.reduce((a, b) => a.score < b.score ? a : b);
+    ? moves.reduce((a, b) => a.score > b.score ? a : b)
+    : moves.reduce((a, b) => a.score < b.score ? a : b);
 }
 
-function checkStaticWin(state, player) {
-  return WIN_COMBOS.some(combo => combo.every(i => state[i] === player));
+function hasWinner(state, mark) {
+  return WIN_COMBOS.some(combo => combo.every(i => state[i] === mark));
+}
+
+function markTemp(cell, mark) {
+  cell.classList.add(mark);
+}
+function unmarkTemp(cell) {
+  cell.classList.remove(X, O);
+  return cell;
 }
 
 function markCell(cell, mark) {
   cell.classList.add(mark);
+  navigator.vibrate?.(50);
+  clickSfx.play().catch(() => {});
+}
+
+function highlightWin(mark) {
+  const combo = WIN_COMBOS.find(c =>
+    c.every(i => cells[i].classList.contains(mark))
+  );
+  if (combo) combo.forEach(i => cells[i].classList.add('win'));
 }
 
 function swapTurns() {
@@ -204,20 +234,26 @@ function finishGame(draw) {
   msgTxt.textContent = draw ? "It's a draw!" : `${circleTurn ? "O" : "X"} wins!`;
   msgBox.classList.add('show');
   msgBox.style.display = 'flex';
-}
 
-function checkWin(mark) {
-  const winningCombo = WIN_COMBOS.find(combo =>
-    combo.every(index => cells[index].classList.contains(mark))
-  );
-
-  if (winningCombo) {
-    winningCombo.forEach(index => cells[index].classList.add('win'));
-    return true;
+  // update score
+  if (!draw) {
+    circleTurn ? oWins++ : xWins++;
+    xScoreEl.textContent = xWins;
+    oScoreEl.textContent = oWins;
+    (circleTurn ? winSfx : winSfx).play().catch(() => {});
+  } else {
+    drawSfx.play().catch(() => {});
   }
-  return false;
 }
 
 function isDraw() {
-  return cells.every(cell => cell.classList.contains(X) || cell.classList.contains(O));
+  return cells.every(c =>
+    c.classList.contains(X) || c.classList.contains(O)
+  );
+}
+
+function checkWin(mark) {
+  return WIN_COMBOS.some(combo =>
+    combo.every(i => cells[i].classList.contains(mark))
+  );
 }
